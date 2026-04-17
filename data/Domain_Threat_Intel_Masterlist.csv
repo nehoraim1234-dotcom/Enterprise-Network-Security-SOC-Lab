@@ -1,0 +1,33 @@
+pattern,match_type,description,category
+mimikatz.exe,filename,Credential Dumping Tool,Credential Access
+sekurlsa,command,Mimikatz Memory Password Extraction,Credential Access
+lsadump,command,LSA Database Dump,Credential Access
+rubeus.exe,filename,Kerberos Attack Tool,Credential Access
+kerberoast,command,Kerberoasting Attack Pattern,Credential Access
+asreproast,command,AS-REP Roasting Attack Pattern,Credential Access
+sharphound.exe,filename,BloodHound AD Collector,Discovery
+bloodhound.exe,filename,AD Path Mapping GUI,Discovery
+adfind.exe,filename,Active Directory Query Tool,Discovery
+-ldappassword,command,LDAP Credential Hunting,Discovery
+responder.exe,filename,LLMNR/NBT-NS Poisoner,Credential Access
+-bypass,command,PowerShell Policy Bypass,Execution
+-enc,command,Encoded PowerShell Script,Defense Evasion
+-windowstyle hidden,command,Stealth PowerShell Execution,Defense Evasion
+vssadmin delete shadows,command,Ransomware Shadow Copy Deletion,Impact
+wevtutil cl,command,Event Log Clearing,Defense Evasion
+secretsdump,command,Impacket Remote Hash Dumping,Credential Access
+psexec.exe,filename,Sysinternals Remote Execution,Lateral Movement
+wmiexec,command,WMI Remote Execution,Lateral Movement
+smbexec,command,SMB Remote Execution,Lateral Movement
+cobaltstrike,command,C2 Framework Communication,Command and Control
+beacon.exe,filename,Cobalt Strike Agent,Command and Control
+procdump,command,Memory Dumping Tool,Credential Access
+lsass.dump,command,LSASS Memory Snapshot,Credential Access
+certutil -urlcache,command,File Download via CertUtil,Execution
+invoke-mimikatz,command,PowerShell Mimikatz Implementation,Credential Access
+nltest /domain_trusts,command,Domain Trust Enumeration,Discovery
+net user /domain,command,Domain User Enumeration,Discovery
+net localgroup administrators,command,Local Admin Group Discovery,Discovery
+schtasks /create,command,Scheduled Task Persistence,Persistence
+reg add,command,Registry Modification,Persistence
+nc.exe,filename,Netcat Listener/Reverse Shell,Command and Control
