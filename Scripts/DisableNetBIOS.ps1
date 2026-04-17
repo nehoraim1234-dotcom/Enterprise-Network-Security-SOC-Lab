@@ -1,0 +1,1 @@
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces\*" -Name NetbiosOptions -Value 2
