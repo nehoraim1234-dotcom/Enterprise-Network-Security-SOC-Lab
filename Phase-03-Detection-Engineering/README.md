@@ -83,3 +83,22 @@ The significance of this statistical monitor is proven by its ability to identif
 
 
 The following evidence illustrates the operational output of the Brute Force detection engine. Upon the breach of the 5-failure threshold, the SIEM successfully identified the anomaly and promoted the event to the SOC dashboard as a High Severity incident.
+
+
+Defense Evasion & Anti-Forensics Detection
+
+In a high-maturity security environment, any attempt to manipulate or delete audit trails is treated as a Critical event. Attackers frequently clear Windows Event Logs to hide evidence of lateral movement, credential dumping, or unauthorized configuration changes. Detecting these actions is essential for maintaining the integrity of the forensic trail.
+
+Real-Time Alert Configuration
+To ensure immediate response, a Real-Time Alert was engineered specifically targeting the clearing of security logs. The logic monitors for Event ID 1102 (Security log cleared) and Event ID 104 (System log cleared). Unlike scheduled alerts, this monitor triggers a notification the millisecond the event is indexed.
+
+The configuration utilizes a Per-Result trigger condition. This ensures that if logs are cleared across multiple hosts simultaneously, each instance is captured as a unique incident, providing the SOC with a complete map of the attacker’s evasion attempts across the network.
+
+![Log Clearing Alert Configuration](./images/log_clearing_realtime_alert_config.png)
+
+![Fired Alert: Windows Log Clearing](./images/fired_alert_windows_log_clearing.png)
+
+Operational Validation: Potential Defense Evasion Identified
+The following evidence confirms the effectiveness of the real-time monitor. The SIEM successfully identified a manual log-clearing event on a production endpoint and escalated it to Critical status.
+
+
