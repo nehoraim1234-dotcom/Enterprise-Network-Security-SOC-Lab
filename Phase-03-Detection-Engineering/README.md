@@ -62,3 +62,24 @@ The significance of monitoring accounts like emergencyIT cannot be overstated. F
 ![Fired Alert: LAPS Break-Glass Logon](./images/laps_critical_logon_fired_alert.png)
 
 The following evidence confirms the system's ability to detect and visualize this activity in the SOC dashboard. Upon the simulation of a logon event for the emergencyIT account, the SIEM successfully identified the telemetry, applied the detection logic, and fired a Critical severity alert. This operational proof demonstrates that the SOC has full visibility .
+
+
+Statistical Analysis & Authentication Anomalies
+
+Statistical Analysis & Authentication Anomalies (Brute Force)
+Detecting automated authentication attacks requires a transition from simple signature matching to Statistical Threshold Monitoring. While a single failed logon is often the result of a user typo, a high frequency of failures in a concentrated timeframe is a primary indicator of automated Brute Force or Password Spraying attempts.
+
+Brute Force Detection Strategy
+To identify these anomalies without generating excessive noise (False Positives), a Scheduled Alert was engineered with a defined statistical threshold. The logic monitors for Event ID 4625 (Failed Logon) and is configured to trigger only when the frequency exceeds 5 failed attempts within a 10-minute sliding window.
+
+This threshold-based approach ensures that the SOC only receives alerts for high-fidelity anomalies. The alert is configured as a Scheduled Cron Job to run every 10 minutes, analyzing the cumulative telemetry from the Windows endpoints to identify patterns that deviate from standard human behavior.
+
+Operational Result: Excessive Authentication Failures
+The significance of this statistical monitor is proven by its ability to identify automated patterns across the domain infrastructure. By utilizing the Per-Result trigger mode, the alert provides the analyst with granular details, including the specific workstation under attack and the targeted accounts. This allows for immediate incident response actions, such as temporary account lockout or the implementation of network-level blocks on the offending IP address.
+
+![Brute Force Alert Configuration](./images/brute_force_scheduled_alert_config.png)
+
+![Fired Alert: Brute Force Detection](./images/splunk_brute_force_statistical_alert.png)
+
+
+The following evidence illustrates the operational output of the Brute Force detection engine. Upon the breach of the 5-failure threshold, the SIEM successfully identified the anomaly and promoted the event to the SOC dashboard as a High Severity incident.
