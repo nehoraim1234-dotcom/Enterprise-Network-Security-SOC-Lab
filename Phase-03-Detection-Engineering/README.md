@@ -45,3 +45,20 @@ Maintaining a standalone intelligence list is a critical architectural requireme
 
 The following results demonstrate the system successfully identifying multiple unauthorized tool executions across the network. By correlating the Process_Command_Line with the centralized intelligence list, the engine correctly flagged executions of mimikatz.exe and responder.exe, providing the SOC with the exact timestamp, the affected host, and the user account responsible for the activity.
 
+
+Identity & Access Monitoring: LAPS & Break-Glass Accounts
+
+dentity & Access Monitoring: LAPS & Break-Glass Accounts
+In a hardened Active Directory environment, "Break-Glass" accounts (such as those managed via LAPS or dedicated emergency IT accounts) are intended for use only during extreme recovery scenarios. Under normal operational conditions, these accounts should remain dormant. Monitoring these accounts is a high-fidelity detection strategy, as any logon activity involving an emergency credential is, by definition, a significant security event that requires immediate validation.
+
+Real-Time Monitoring Configuration
+To ensure zero-latency visibility, a Real-Time Alert was engineered to monitor the specific logon events associated with these privileged accounts. The detection logic focuses on successful authentications (Event ID 4624) where the target user matches the defined emergency identity. This alert is configured with a Per-Result trigger to ensure that every single logon attempt is captured and escalated, providing the SOC with an instantaneous notification of highly privileged access.
+
+Operational Validation: Unauthorized Privileged Access
+The significance of monitoring accounts like emergencyIT cannot be overstated. From an adversary's perspective, compromising a "Break-Glass" account provides near-unrestricted access to the domain infrastructure, often bypassing standard MFA or conditional access policies. Therefore, seeing this account logged in without a pre-approved change window is a critical "Red Flag" indicating a potential compromise or a severe breach of internal protocol.
+
+![LAPS Break-Glass Alert Detail](./images/emergencyit_realtime_alert_detail.png)
+
+![Fired Alert: LAPS Break-Glass Logon](./images/laps_critical_logon_fired_alert.png)
+
+The following evidence confirms the system's ability to detect and visualize this activity in the SOC dashboard. Upon the simulation of a logon event for the emergencyIT account, the SIEM successfully identified the telemetry, applied the detection logic, and fired a Critical severity alert. This operational proof demonstrates that the SOC has full visibility .
