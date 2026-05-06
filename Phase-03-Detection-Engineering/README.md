@@ -131,3 +131,14 @@ Operational Result: Detection of Unauthorized Persistence
 The effectiveness of this detection logic is demonstrated in the operational proof below. The system successfully identified a sequence of high-risk events originating from the Domain Controller (DC100).
 
 In this scenario, the SIEM detected the creation of a new user account named backdoor, followed immediately by its addition to a privileged group. Because the SPL logic successfully separated the Actor (administrator) from the Target (backdoor), the resulting alert provides the immediate context needed for an incident response. This allows the SOC to verify if the creation of a "backdoor" account was a sanctioned administrative action or a critical indicator of compromise.
+
+
+### Operational Proof: Threat Intelligence Correlation
+
+The primary objective of the Threat Intelligence module is to transform static Indicators of Compromise (IOCs) into active defensive measures. The following evidence demonstrates the SIEM's capability to correlate live network telemetry with the centralized threat intelligence masterlist.
+
+The dashboard below displays the **Fired Alerts** interface, confirming that the detection engine successfully identified communications with known malicious domains. By categorizing these events as **High Severity** and utilizing a **Scheduled** correlation logic, the system ensures that any outbound traffic to C2 (Command & Control) infrastructure is immediately flagged for SOC triage.
+
+This operational view validates that the modular framework is not only ingesting intelligence but effectively applying it to identify potential breaches in real-time.
+
+![Centralized Threat Intelligence Dashboard](./images/centralized_threat_intel_dashboard_view.png)
