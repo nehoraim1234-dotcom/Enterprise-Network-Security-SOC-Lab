@@ -102,3 +102,32 @@ Operational Validation: Potential Defense Evasion Identified
 The following evidence confirms the effectiveness of the real-time monitor. The SIEM successfully identified a manual log-clearing event on a production endpoint and escalated it to Critical status.
 
 
+Identity Analysis & Privilege Escalation Detection
+
+Monitoring identity-based events within Active Directory is a cornerstone of SOC operations. Attackers often seek to establish Persistence by creating new user accounts or elevating existing ones to privileged groups (e.g., Domain Admins). Detecting these changes requires more than just identifying an Event ID; it requires sophisticated data parsing to distinguish between the administrator performing the action and the account being modified.
+
+Technical Challenge: Multi-Value Field Parsing
+A significant technical hurdle when analyzing Windows Security logs—specifically Event ID 4720 (Account Creation) and Event ID 4732/4728 (Member Added to Group)—is the structure of the Account_Name field. Windows logs these as "Multivalue" fields, where the same field name is used for different entities within a single event.
+
+The Conflict: The log contains two Account_Name entries. The first is the Actor (the Subject who performed the action), and the second is the Target (the object/user being created or changed).
+
+The Solution: To transform this raw data into an actionable alert, I utilized the Splunk mvindex function within an eval command.
+
+Detailed Logic Breakdown:
+
+Indexing: Splunk stores these multiple values in an array-like structure.
+
+eval Actor = mvindex(Account_Name, 0): This command instructs the engine to extract the value at index 0 (the first occurrence), which corresponds to the administrative account that initiated the change.
+
+eval Target_User = mvindex(Account_Name, 1): This extracts the value at index 1 (the second occurrence), identifying the specific account that received the new permissions or was newly created.
+
+This granular parsing ensures that the SOC analyst receives a clear narrative: "Admin X created Account Y," rather than a confusing log that lists the same field name twice.
+
+![Advanced Identity Parsing](./images/spl_advanced_parsing_privilege_escalation.png)
+
+![Identity Analysis Result](./images/siem_critical_alerts_dashboard)
+
+Operational Result: Detection of Unauthorized Persistence
+The effectiveness of this detection logic is demonstrated in the operational proof below. The system successfully identified a sequence of high-risk events originating from the Domain Controller (DC100).
+
+In this scenario, the SIEM detected the creation of a new user account named backdoor, followed immediately by its addition to a privileged group. Because the SPL logic successfully separated the Actor (administrator) from the Target (backdoor), the resulting alert provides the immediate context needed for an incident response. This allows the SOC to verify if the creation of a "backdoor" account was a sanctioned administrative action or a critical indicator of compromise.
