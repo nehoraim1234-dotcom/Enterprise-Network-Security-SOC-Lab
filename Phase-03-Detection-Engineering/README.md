@@ -125,7 +125,7 @@ This granular parsing ensures that the SOC analyst receives a clear narrative: "
 
 ![Advanced Identity Parsing](./images/spl_advanced_parsing_privilege_escalation.png)
 
-![Identity Analysis Result](./images/siem_critical_alerts_dashboard)
+![Identity Analysis Result](./images/siem_critical_alerts_dashboard.png)
 
 Operational Result: Detection of Unauthorized Persistence
 The effectiveness of this detection logic is demonstrated in the operational proof below. The system successfully identified a sequence of high-risk events originating from the Domain Controller (DC100).
