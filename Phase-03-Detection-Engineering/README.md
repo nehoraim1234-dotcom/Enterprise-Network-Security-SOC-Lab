@@ -37,7 +37,11 @@ Credential Dumping (Mimikatz): Tools like Mimikatz are specifically engineered t
 
 Because these tools are exclusively used for exploitation or advanced penetration testing, the detection engine is tuned to treat any single occurrence as a critical security event.
 
-pictur :
-
+![Domain Threat Intel Masterlist](./images/ioc_threat_intel_masterlist_csv.png)
 
 Maintaining a standalone intelligence list is a critical architectural requirement in a professional SOC environment. It ensures that detection signatures are decoupled from the search logic. If a new threat emerges, the SOC analyst only needs to update the list, and all associated alerts are instantly updated without the need to modify complex SPL code. This minimizes the risk of syntax errors during a high-pressure incident and ensures that the environment remains agile against evolving attack vectors.
+
+![Dynamic Regex Detection Engine Results](./images/dynamic_regex_detection_engine_results.png)
+
+The following results demonstrate the system successfully identifying multiple unauthorized tool executions across the network. By correlating the Process_Command_Line with the centralized intelligence list, the engine correctly flagged executions of mimikatz.exe and responder.exe, providing the SOC with the exact timestamp, the affected host, and the user account responsible for the activity.
+
