@@ -23,4 +23,21 @@ UDP Listener (Port 514): Configured as a Syslog input to capture and parse async
 
 ---
 
+Modular Threat Intelligence & Detection Engineering
+The transition from passive log collection to active threat detection requires a structured approach to identifying adversary activity. In this phase, the SIEM architecture was enhanced by implementing a Modular Threat Intelligence Framework. This approach is superior to traditional, hardcoded detection rules because it centralizes intelligence into a single repository, allowing for rapid updates and scalable monitoring across the entire infrastructure.
 
+The Centralized Intelligence Repository
+Before the detection engine can identify a threat, it must have a reliable source of "truth" regarding what constitutes a malicious event. To achieve this, a centralized intelligence layer was developed using a dedicated repository: Domain_Threat_Intel_Masterlist.csv.
+
+
+The Significance of Adversary Tooling (Red Flags)
+The patterns defined in the masterlist—such as Mimikatz, Responder, Rubeus, and BloodHound—represent high-fidelity Indicators of Compromise (IoCs). In a production enterprise network, the presence of these terms in a process command line is an immediate "Red Flag" :
+
+Credential Dumping (Mimikatz): Tools like Mimikatz are specifically engineered to extract plaintext passwords and NTLM hashes from memory (LSASS). Seeing this tool execute even a single time indicates a 100% probability of a post-exploitation phase where an attacker is attempting to escalate privileges.
+
+Because these tools are exclusively used for exploitation or advanced penetration testing, the detection engine is tuned to treat any single occurrence as a critical security event.
+
+pictur :
+
+
+Maintaining a standalone intelligence list is a critical architectural requirement in a professional SOC environment. It ensures that detection signatures are decoupled from the search logic. If a new threat emerges, the SOC analyst only needs to update the list, and all associated alerts are instantly updated without the need to modify complex SPL code. This minimizes the risk of syntax errors during a high-pressure incident and ensures that the environment remains agile against evolving attack vectors.
