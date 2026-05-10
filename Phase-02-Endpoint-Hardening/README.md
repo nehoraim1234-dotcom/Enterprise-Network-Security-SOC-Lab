@@ -134,17 +134,38 @@ Computer Configuration \ Policies \ Windows Settings \ Security Settings \ Appli
 
 ### 6. Local Administrator Password Solution (LAPS)
 
-[cite_start]**The Reason:** In standard deployments, local administrator accounts share a common password across all workstations[cite: 99]. [cite_start]Compromising one machine allows an attacker to extract the local NTLM hash and utilize Pass-the-Hash (PtH) to pivot to any other workstation in the domain[cite: 100].
+## Endpoint Identity Hardening & LAPS Implementation
 
-[cite_start]**The Explanation:** I deployed Microsoft LAPS to automate the management of the built-in local administrator[cite: 98]. [cite_start]The GPO forces every workstation to generate a unique, randomized, and highly complex password that is securely stored within an active directory attribute[cite: 101, 103]. [cite_start]As a Defense-in-Depth measure against automated enumeration and malware worms, I renamed the default `Administrator` account (SID-500) to `emergencyIT`, causing brute-force scripts to fail immediately at the username validation phase, preserving SIEM bandwidth[cite: 107, 108, 109, 110].
+**Objective:** To eliminate the risk of domain-wide lateral movement by ensuring that a compromise of a single local administrator account does not grant access to any other endpoint in the network.
 
-**Configuration Paths:**
-* [cite_start]**LAPS Enforcement:** `Computer Configuration > Policies > Administrative Templates > LAPS > Password Settings > Enabled` [cite: 101]
-* [cite_start]**Rename Admin:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Rename administrator account` [cite: 107]
+### Local Administrator Password Solution (LAPS)
+
+**The Logic:** In a typical enterprise environment, the local "Administrator" account often shares the same static password across all workstations. This creates a critical vulnerability: if an adversary compromises one machine and extracts the local admin hash, they can use **Pass-the-Hash (PtH)** to pivot across the entire domain. I implemented Microsoft LAPS to automate and secure the local identity lifecycle.
+
+**Operational Impact:**
+* **Password Uniqueness:** LAPS forces every workstation to generate a unique, highly complex, and randomized password for its local administrator account. This effectively destroys the "Golden Password" attack vector.
+* **Encrypted Centralization:** Passwords are no longer stored on the local disk. Instead, they are encrypted and stored within the **ms-Mcs-AdmPwd** attribute of the computer object in Active Directory, accessible only by authorized IT personnel.
+
+**Path:** `Computer Configuration > Policies > Administrative Templates > LAPS`
 
 ![LAPS GPO Configuration Settings](./images/laps_gpo_configuration_settings.png)
 ![LAPS AD Attribute Verification](./images/laps_ad_attribute_verification.png)
+
+### Built-in Administrator Obfuscation (Rename)
+
+**The Logic:** The built-in Administrator account (SID-500) is a static target for automated brute-force scripts. I implemented a GPO to rename this account to **emergencyIT**. This provides a layer of **Security through Obfuscation**, causing automated credential-stuffing tools to fail immediately at the username validation phase, reducing the attack surface and filtering out low-level "noise" in the security logs.
+
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Rename administrator account`
+
 ![Emergency Admin Identity Hardening](./images/emergency_admin_identity_hardening.png)
+
+---
+
+### Technical Breakdown:
+
+* **Breaking the SAM Database Value:** In a standard environment, the NTLM hash of the local administrator is identical across the fleet. LAPS ensures that the SAM (Security Account Manager) database of every endpoint contains a unique secret, mathematically preventing lateral movement via local credential reuse.
+* **Role-Based Access (RBAC):** Access to the passwords stored in Active Directory is governed by ACLs on the `ms-Mcs-AdmPwd` attribute. This ensures that even if a Tier 2 support account is compromised, the attacker cannot read the local administrator passwords of other Tier 2 assets or Tier 0 servers.
+* **SID-500 Consistency:** While the account is renamed for obfuscation, its Security Identifier (SID) remains unchanged (ending in -500). This allows the SOC to maintain consistent monitoring and alerting on this high-risk account regardless of its display name.
 
 ---
 
