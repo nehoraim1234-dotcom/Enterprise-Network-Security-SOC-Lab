@@ -213,20 +213,49 @@ Computer Configuration \ Policies \ Windows Settings \ Security Settings \ Appli
 ה
 ---
 
-### 7. Legacy Protocol Eradication: SMBv1 Vulnerability
+## Protocol Sanitization: Eradicating Legacy SMBv1
 
-[cite_start]**The Reason:** SMBv1 is a deprecated, 30-year-old protocol lacking modern encryption[cite: 111, 112]. [cite_start]It is heavily vulnerable to Remote Code Execution (RCE) flaws such as EternalBlue (MS17-010), utilized by ransomware worms like WannaCry to spread laterally without user interaction[cite: 112, 113].
+**Objective:** To eliminate the enterprise attack surface associated with unauthenticated legacy protocols and mitigate the risk of remote code execution (RCE) and lateral ransomware propagation.
 
-**The Explanation:** I enforced a strict eradication of SMBv1. [cite_start]For Server-Side (Inbound) protection, a Group Policy preference injects a registry key into `LanmanServer\Parameters` setting `SMB1` to `0`, dismantling the listening service[cite: 115, 116]. [cite_start]For Client-Side (Outbound) protection, the `mrxsmb10` client driver startup type is permanently forced to `4` (Disabled), ensuring the workstation cannot initiate outbound connections to malicious legacy servers[cite: 117, 118]. [cite_start]A PowerShell audit confirmed execution[cite: 119].
+### The Engineering Logic: Why Eradicate SMBv1?
 
-**Configuration Paths:**
-* [cite_start]**Server-Side:** `Computer Configuration > Preferences > Windows Settings > Registry > HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\SMB1 = 0` [cite: 115]
-* [cite_start]**Client-Side:** `Computer Configuration > Preferences > Windows Settings > Registry > HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\mrxsmb10\Start = 4` [cite: 117]
+SMBv1 is a 30-year-old legacy protocol that is fundamentally insecure. It lacks modern security features such as pre-authentication integrity, encryption, and robust message signing. Most importantly, it is the primary vector for the **EternalBlue (MS17-010)** exploit, which facilitated global ransomware outbreaks like WannaCry and NotPetya. By systematically removing this protocol, we achieve a higher state of **Infrastructure Hardening**.
+
+---
+
+### Implementation Phases:
+
+#### I. Server-Side Disablement (Registry Hardening)
+
+To prevent the system from accepting SMBv1 inbound connections (acting as a server), I implemented a Registry-level restriction. By setting the **SMB1** parameter to **0**, the LanmanServer service is instructed to reject any negotiation requests utilizing the version 1.0 dialect.
+
+* **Registry Path:** `HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters`
+* **Value:** `SMB1` (REG_DWORD) = `0`
 
 ![Disable SMBv1 Registry Hardening](./images/disable_smbv1_registry_hardening.png)
+
+#### II. Kernel-Level Driver Deactivation (mrxsmb10)
+
+Disabling the registry key only stops the server component. To ensure the OS cannot act as an SMBv1 client, the underlying Kernel driver must be neutralized. I reconfigured the **mrxsmb10** (SMB 1.0 Mini-Redirector) driver to a disabled state. Setting the start value to **4** prevents the driver from initializing during the boot sequence, effectively removing the protocol from the Windows network stack.
+
+* **Registry Path:** `HKLM\SYSTEM\CurrentControlSet\Services\mrxsmb10`
+* **Value:** `Start` (REG_DWORD) = `4`
+
 ![Disable mrxsmb10 Kernel Driver](./images/disable_mrxsmb10_kernel_driver.png)
+
+#### III. Post-Enforcement Verification & Auditing
+
+To ensure the integrity of the hardening process, I performed a forensic audit of the service states. Using system-level queries, I verified that the SMBv1 components are no longer active in the runtime environment. This confirms that the environment has successfully migrated to a minimum of SMBv2.1/v3.0, which supports advanced security features like AES-CCM encryption.
+
 ![SMBv1 Disable Audit](./images/smbv1_disable_audit.png)
 
+---
+
+### High-Resolution Technical Breakdown:
+
+* **The mrxsmb10 Driver:** This is a kernel-mode driver that functions as a network redirector. It resides between the User Mode application and the network hardware. By disabling it, any application attempting to initiate an SMBv1 connection will fail at the system call level, as the operating system no longer possesses the instructions required to "speak" the protocol.
+* **MS17-010 (EternalBlue) Mitigation:** The EternalBlue exploit targets a buffer overflow vulnerability within the way SMBv1 handles specially crafted packets. By deactivating the protocol at the registry and driver levels, the vulnerable code is never loaded into memory, making the system mathematically immune to this specific exploit chain regardless of patch status.
+* **Protocol Negotiation:** In a hardened state, the client and server will only negotiate via SMBv2 or higher. This enables **SMB Signing**, which protects against Man-in-the-Middle (MitM) attacks by ensuring the integrity of every packet via a cryptographic hash.
 ---
 
 ### 8. NTLM Eradication & Kerberos Enforcement
