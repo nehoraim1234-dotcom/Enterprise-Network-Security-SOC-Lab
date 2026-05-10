@@ -249,26 +249,47 @@ To ensure the integrity of the hardening process, I performed a forensic audit o
 
 ![SMBv1 Disable Audit](./images/smbv1_disable_audit.png)
 
+<br>
+<br>
+
 ---
 
-### High-Resolution Technical Breakdown:
+### Protocol Sanitization: NTLM Restriction & Kerberos Migration
 
-* **The mrxsmb10 Driver:** This is a kernel-mode driver that functions as a network redirector. It resides between the User Mode application and the network hardware. By disabling it, any application attempting to initiate an SMBv1 connection will fail at the system call level, as the operating system no longer possesses the instructions required to "speak" the protocol.
-* **MS17-010 (EternalBlue) Mitigation:** The EternalBlue exploit targets a buffer overflow vulnerability within the way SMBv1 handles specially crafted packets. By deactivating the protocol at the registry and driver levels, the vulnerable code is never loaded into memory, making the system mathematically immune to this specific exploit chain regardless of patch status.
-* **Protocol Negotiation:** In a hardened state, the client and server will only negotiate via SMBv2 or higher. This enables **SMB Signing**, which protects against Man-in-the-Middle (MitM) attacks by ensuring the integrity of every packet via a cryptographic hash.
+**Objective:** To achieve high-assurance identity security by neutralizing NTLM-based attack vectors and enforcing a transition to a Kerberos-only authentication environment.
+
+### The Engineering Logic: Why Eradicate NTLM?
+
+NTLM (New Technology LAN Manager) is a legacy authentication protocol that poses severe structural security risks. Unlike Kerberos, it does not support **Mutual Authentication**, leaving clients vulnerable to rogue servers. Most importantly, NTLM is inherently susceptible to **Relay Attacks**, where an adversary intercepts a challenge-response handshake and "relays" it to a different target server to gain unauthorized access without ever knowing the user's password.
+
+By enforcing a "Deny-by-Default" posture for NTLM, the infrastructure is forced to utilize **Kerberos**, which leverages a **Key Distribution Center (KDC)** and time-sensitive tickets to provide superior cryptographic protection and non-replayable authentication.
+
 ---
 
-### 8. NTLM Eradication & Kerberos Enforcement
+### Implementation Phases:
 
-[cite_start]**The Reason:** NTLM is a legacy authentication protocol that lacks mutual authentication[cite: 121]. [cite_start]This fundamental flaw allows attackers to easily intercept and relay credentials (NTLM Relay Attacks) to gain unauthorized access[cite: 121].
+#### I. Inbound Traffic Hardening (Incoming NTLM)
 
-[cite_start]**The Explanation:** I secured the identity perimeter by completely disabling NTLM, forcing the environment to exclusively use Kerberos, which cryptographically verifies both client and server identities[cite: 122]. [cite_start]By setting the "Restrict NTLM: Incoming NTLM traffic" policy to "Deny all accounts", workstations are structurally hardened to reject legacy authentication attempts, effectively neutralizing Pass-the-Hash and inbound NTLM Relay attacks domain-wide[cite: 124, 126].
-
-**Configuration Path:**
-[cite_start]`Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Network security: Restrict NTLM: Incoming NTLM traffic` [cite: 124]
+This control prevents the local system from acting as an NTLM target. By denying incoming NTLM traffic, we effectively neutralize the ability for an attacker to use a stolen NTLM hash to authenticate to the machine remotely. This shuts down the most common lateral movement path used by automated malware and advanced persistent threats (APTs).
 
 ![Restrict Incoming NTLM Traffic Deny](./images/restrict_incoming_ntlm_traffic_deny.png)
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Network security: Restrict NTLM: Incoming NTLM traffic`
+
+#### II. Domain-Wide Authentication Policy (Outbound & Domain)
+
+To ensure an airtight identity perimeter, I implemented a domain-level restriction. This ensures that domain accounts are prohibited from utilizing NTLM for authentication across the forest. This prevents "Downgrade Attacks," where a malicious actor or legacy application attempts to force the system into using the weaker NTLM protocol to bypass modern security controls.
+
 ![Restrict NTLM Authentication Policy](./images/restrict_ntlm_authentication_policy.png)
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Network security: Restrict NTLM: NTLM authentication in this domain`
+
+---
+
+### Technical Analysis:
+
+* **Neutralizing NTLM Relay Attacks:** In a relay scenario (e.g., via LLMNR or WPAD poisoning), an attacker captures an NTLM negotiation attempt and forwards it to a sensitive service. By configuring `Deny all` for incoming NTLM, the destination server will immediately drop the request, rendering the relay attempt impossible at the protocol level.
+* **Mitigating Pass-the-Hash (PtH):** NTLM depends on a static hash stored in the **LSASS** process. Kerberos, however, uses a **Ticket Granting Ticket (TGT)** system. Transitioning to Kerberos ensures that even if an attacker harvests a legacy NTLM hash from a workstation, they cannot use it to pivot to servers that strictly demand Kerberos tickets.
+* **Enforcing Mutual Authentication:** NTLM only proves the client's identity to the server. Kerberos requires the server to prove its identity to the client as well. This prevents **Man-in-the-Middle (MitM)** attacks where a user might accidentally provide their credentials to a spoofed administrative share or file server.
+* **Cryptographic Superiority:** NTLM uses weak MD4/MD5-based hashing which is vulnerable to rapid offline brute-forcing. Kerberos utilizes **AES-256** encryption for its tickets and session keys, providing a modern cryptographic baseline that is resistant to contemporary cracking techniques.
 
 ---
 
