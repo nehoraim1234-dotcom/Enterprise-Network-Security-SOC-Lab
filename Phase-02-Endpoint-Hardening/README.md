@@ -100,40 +100,84 @@ Computer Configuration \ Policies \ Windows Settings \ Security Settings \ Appli
 
 ---
 
-### PowerShell Deep Visibility & Process Auditing
 
-[cite_start]**The Reason:** By default, Windows operating systems do not record process creation to conserve resources, leaving the SOC completely blind to execution tactics[cite: 57, 59].
+## Forensic Telemetry & Execution Visibility
 
-**The Explanation:** I transformed every endpoint into an active security sensor. [cite_start]I enabled **Audit Process Creation** to generate Event ID 4688 every time an executable is launched[cite: 58]. [cite_start]Crucially, I integrated **Command Line Auditing** into these events, forcing the kernel to capture the exact arguments passed (e.g., `-ExecutionPolicy Bypass`) instead of just the binary name[cite: 66, 67, 71]. To counter obfuscation, I activated **PowerShell Script Block Logging**. [cite_start]This critical control captures the actual decoded code executed by the engine; if an attacker uses Base64 encoding, this log reveals the true malicious payload for forensic analysis[cite: 49, 50, 51, 52].
+**Objective:** To transform endpoints into high-fidelity sensors, eliminating visibility "blind spots" within the SIEM by capturing detailed execution artifacts and neutralizing script-based obfuscation at the source.
 
-**Configuration Paths:**
-* [cite_start]**Process Creation:** `Computer Configuration > Policies > Windows Settings > Security Settings > Advanced Audit Policy > Detailed Tracking > Audit Process Creation > Success` [cite: 63]
-* [cite_start]**Command Line Info:** `Computer Configuration > Policies > Administrative Templates > System > Audit Process Creation > Include command line in process creation events > Enabled` [cite: 72]
-* [cite_start]**PowerShell Logging:** `Computer Configuration > Policies > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging > Enabled` [cite: 54]
+### Process Creation Auditing (Event ID 4688)
+
+**The Logic:** Default Windows configurations do not log process initialization, allowing adversaries to run discovery tools or malicious binaries without leaving a forensic footprint. I enabled **Audit Process Creation** to generate **Event ID 4688** for every executable launch, providing the baseline audit trail needed to reconstruct an attacker’s timeline.
+
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Advanced Audit Policy Configuration > Audit Policies > Detailed Tracking > Audit Process Creation`
+
+![Audit Process Creation Success Policy](./images/audit_process_creation_success_policy.png)
+
+### Data Enrichment: Command-Line Argument Capture
+
+**The Logic:** A process name alone (e.g., `powershell.exe`) is insufficient for triage. To identify **Malicious Intent**, the SOC must see the specific arguments passed to the process. This setting forces the kernel to log the full command string, which is critical for detecting encoded payloads, hidden windows, and unauthorized network connections.
+
+**Path:** `Computer Configuration > Policies > Administrative Templates > System > Audit Process Creation > Include command line in process creation events`
+
+![Include Command Line in Event 4688](./images/include_command_line_in_event_4688.png)
+
+### Neutralizing Obfuscation: PowerShell Script Block Logging
+
+**The Logic:** Adversaries use encoding (Base64) and string manipulation to bypass signature-based defenses. **Script Block Logging** intercepts the code at the engine level after it has been de-obfuscated in memory—immediately before execution—and logs the **Plain Text** script. This is the primary defense against **Fileless Attacks** and **Living off the Land (LotL)** techniques.
+
+**Path:** `Computer Configuration > Policies > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging`
 
 ![PowerShell Script Block Logging](./images/powershell_script_block_logging_config.png)
-![Audit Process Creation Success Policy](./images/audit_process_creation_success_policy.png)
-![Include Command Line in Event 4688](./images/include_command_line_in_event_4688.png)
 
 ---
 
-### 5. Tier 0 Identity Protection & Lateral Movement Eradication
+### Strategic SOC Impact:
 
-[cite_start]**The Reason:** In default environments, Domain Administrators can log on to any domain-joined workstation[cite: 79]. [cite_start]If a highly privileged account authenticates to a compromised Tier 2 endpoint, the Windows Local Security Authority Subsystem Service (LSASS) caches the user's credential material in RAM, enabling Pass-the-Hash (PtH) attacks via tools like Mimikatz[cite: 80, 81].
+* **Real-Time De-obfuscation:** Capturing script blocks in plain text eliminates the need for manual decoding during an incident, directly reducing **MTTR** (Mean Time to Respond).
+* **High-Fidelity Context:** Command-line auditing transforms generic process logs into actionable forensic data, revealing specific attacker TTPs.
+* **Tamper Resistance:** Utilizing native kernel-level controls ensures consistent telemetry that is significantly harder for an adversary to suppress compared to third-party agents.
 
-**The Explanation:** I engineered a centralized Defense-in-Depth perimeter using a strict "Tiered Identity" model. [cite_start]I created a dedicated named administrative identity (`Admin Nehorai`) in an isolated Tier0 OU[cite: 74, 76]. [cite_start]I then deployed a comprehensive "Deny All" User Rights Assignment GPO linked to the Workstations OU[cite: 82, 83]. [cite_start]This explicitly denies the Domain Admins group from authenticating across all fundamental logon types: Local (Type 2), Network (Type 3), Batch (Type 4), Service (Type 5), and RDP (Type 10)[cite: 85, 87, 89, 91, 93]. [cite_start]This ensures the Primary Token of a Domain Admin is never cached in workstation memory, mathematically eliminating lateral movement via stolen Tier 0 credentials[cite: 86, 95].
+<br>
+<br>
 
-**Configuration Path:**
-[cite_start]`Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment` [cite: 83]
+
+### Technical Analysis:
+
+* **Parent-Child Relationship (Event 4688):** This event captures the **New Process ID** and the **Creator Process ID**. This allows the SOC to build a "Process Tree," revealing the execution chain—for example, identifying if a web browser (`chrome.exe`) spawned a command shell (`cmd.exe`), which is a major red flag for an exploit.
+* **Buffer Logging (Event 4104):** Unlike standard logging, Script Block Logging (ID 4104) captures the entire buffer processed by `System.Management.Automation.dll`. Since the engine must de-obfuscate the code to run it, the log captures the final, "clean" version of the script regardless of how it was encoded on the disk or in the initial command.
+* **Registry-Level Enforcement:** Enabling command-line auditing modifies the `ProcessCreationIncludeCmdLine_Enabled` value in the registry. This instructs the Windows auditing engine to copy the process parameters into the security event log buffer during the `NtCreateUserProcess` syscall.
+---
+
+## Identity Segmentation & Lateral Movement Eradication
+
+**Objective:** To eliminate the risk of privilege escalation and lateral movement by implementing a strict Tiered Administration Model, ensuring that high-privileged credentials are never exposed on lower-security assets.
+
+### Tiered Administration Architecture
+
+**The Logic:** In a default Active Directory environment, administrative accounts are often used across all workstations, leading to "identity sprawl." I engineered a logical separation of assets and identities by creating a dedicated **Tier 0 OU**. This container acts as a "security vault" for the domain's most sensitive identities (e.g., `Admin Nehorai`), isolating them from the standard user population and workstations.
 
 ![Tier 0 Privileged Segmentation](./images/tier0_privileged_segmentation.png)
+
+### Administrative Boundary Enforcement (URA)
+
+**The Logic:** To enforce the boundary between security tiers, I deployed a **User Rights Assignment (URA)** GPO. This policy implements a "Deny-by-Default" rule that explicitly blocks the **Domain Admins** group from authenticating on any Tier 2 Workstation. By denying access across all primary logon vectors—Local, Network, RDP, Service, and Batch—the identity perimeter is mathematically secured against unauthorized access.
+
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment`
+
 ![Tier 0 Logon Restrictions](./images/tier0_logon_restrictions.png)
 ![Deny Domain Admin Local Logon](./images/deny_domain_admin_local_logon_workstations.png)
 
 ---
 
-### 6. Local Administrator Password Solution (LAPS)
+### Technical Analysis:
 
+* **LSASS & Credential Harvesting Mitigation:** When a user authenticates to a Windows machine, credential material (NTLM hashes or Kerberos tickets) is cached in the **LSASS (Local Security Authority Subsystem Service)** memory process. If an adversary compromises a workstation, they can dump LSASS to harvest these credentials. By blocking Tier 0 logons to workstations, we ensure that high-privileged hashes never exist in the memory of a Tier 2 asset, effectively neutralizing **Pass-the-Hash (PtH)** attacks.
+* **Eradicating Lateral Movement:** The most common attack path involves compromising a standard user and "pivoting" through the network to find a machine where an administrator is logged in. This tiered architecture breaks this chain; even if an attacker achieves `SYSTEM` privileges on every workstation in the domain, they are structurally prevented from capturing a Tier 0 token.
+* **URA Priority:** Within the Windows security subsystem, a **Deny** right in the User Rights Assignment always takes precedence over an **Allow** right. This ensures that even if an administrator is accidentally added to a local "Remote Desktop Users" group, the GPO-level Deny will maintain the security boundary and block the session.
+
+<br>
+<br>
+---
 ## Endpoint Identity Hardening & LAPS Implementation
 
 **Objective:** To eliminate the risk of domain-wide lateral movement by ensuring that a compromise of a single local administrator account does not grant access to any other endpoint in the network.
@@ -166,7 +210,7 @@ Computer Configuration \ Policies \ Windows Settings \ Security Settings \ Appli
 * **Breaking the SAM Database Value:** In a standard environment, the NTLM hash of the local administrator is identical across the fleet. LAPS ensures that the SAM (Security Account Manager) database of every endpoint contains a unique secret, mathematically preventing lateral movement via local credential reuse.
 * **Role-Based Access (RBAC):** Access to the passwords stored in Active Directory is governed by ACLs on the `ms-Mcs-AdmPwd` attribute. This ensures that even if a Tier 2 support account is compromised, the attacker cannot read the local administrator passwords of other Tier 2 assets or Tier 0 servers.
 * **SID-500 Consistency:** While the account is renamed for obfuscation, its Security Identifier (SID) remains unchanged (ending in -500). This allows the SOC to maintain consistent monitoring and alerting on this high-risk account regardless of its display name.
-
+ה
 ---
 
 ### 7. Legacy Protocol Eradication: SMBv1 Vulnerability
