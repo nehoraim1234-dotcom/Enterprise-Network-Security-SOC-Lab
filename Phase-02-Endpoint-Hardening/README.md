@@ -293,16 +293,35 @@ To ensure an airtight identity perimeter, I implemented a domain-level restricti
 
 ---
 
-### 9. Network Cryptography: Bidirectional SMB Signing
+## Network Integrity: Bidirectional SMB Signing Enforcement
 
-[cite_start]**The Reason:** By default, Windows network communications do not require cryptographic signatures[cite: 129]. [cite_start]Adversaries exploit this to silently intercept traffic between workstations and servers, altering packets or relaying authentication handshakes (Man-in-the-Middle)[cite: 130].
+**Objective:** To neutralize Man-in-the-Middle (MitM) and NTLM Relay attacks by ensuring the cryptographic integrity and authenticity of every SMB packet transmitted across the network.
 
-[cite_start]**The Explanation:** I explicitly mandated digital signatures for both the originating traffic (Microsoft network client) and the receiving traffic (Microsoft network server)[cite: 131]. [cite_start]This establishes a two-way cryptographic trust requirement[cite: 132]. [cite_start]Every single packet must now carry a valid signature generated from the authenticated session key[cite: 133]. [cite_start]If an attacker attempts a relay attack, the connection drops immediately because they lack the cryptographic session key to sign manipulated packets[cite: 134].
+### The Engineering Logic: Packet Integrity vs. Interception
 
-**Configuration Path:**
-[cite_start]`Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Microsoft network client/server: Digitally sign communications (always) > Enabled` [cite: 135]
+Standard SMB communication is vulnerable to packet manipulation. An adversary positioned between a client and a server can intercept the traffic and inject malicious payloads or commands into the active session. SMB Signing utilizes a cryptographic hash to sign every message in the stream. If even a single bit is altered during transit, the signature becomes invalid, and the session is terminated by the operating system.
+
+By enforcing **Bidirectional Signing**, we ensure that both the Server and the Client are prohibited from downgrading to an unsigned state, creating a "Secure Tunnel" for all file and print sharing activities.
+
+---
+
+### Implementation Phases:
+
+#### I. Server-Side Enforcement (Incoming Connections)
+
+This setting ensures that the Domain Controller and File Servers will refuse any connection from a client that does not support or provide digital signatures. This is the primary defense against NTLM Relay attacks targeting administrative shares (e.g., C$, ADMIN$).
 
 ![SMB Signing Bidirectional Enforcement](./images/smb_signing_bidirectional_enforcement.png)
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Microsoft network server: Digitally sign communications (always)`
+
+#### II. Client-Side Enforcement (Outbound Connections)
+
+To prevent users from accidentally connecting to a rogue or spoofed server, the client is configured to demand a signature from the destination. If an attacker attempts to spoof a file server to capture credentials or deploy malware, the connection will fail because the attacker cannot provide a valid cryptographic signature for the domain-joined session.
+
+**Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > Security Options > Microsoft network client: Digitally sign communications (always)`
+
+<br>
+<br>
 
 ---
 
