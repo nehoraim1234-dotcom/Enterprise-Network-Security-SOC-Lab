@@ -1,4 +1,4 @@
-Phase 2: Active Directory Hardening & Identity Isolation
+### Phase 2: Active Directory Hardening & Identity Isolation
 Design Objectives: Breaking the Attack Chain
 This phase transitions the Active Directory environment from a flat, permissive state to a Zero-Trust Baseline. The primary objective is to disrupt the adversary's lifecycle—specifically Credential Harvesting and Lateral Movement—by enforcing strict trust boundaries and eliminating legacy attack vectors.
 
@@ -11,7 +11,7 @@ Execution Control (AppLocker): Kernel-level binary verification using digital si
 
 Telemetry Augmentation: Transformation of endpoints into high-fidelity sensors via Script Block Logging and Process Command-Line Auditing.
 
-1. Identity Segmentation: Tiered Administration
+Identity Segmentation: Tiered Administration
 Objective: Mathematically eliminate the risk of Domain Admin credential theft from compromised workstations.
 
 Engineering Logic:
@@ -23,45 +23,84 @@ URA Enforcement: Deployment of a "Deny-by-Default" User Rights Assignment GPO. T
 
 Result: An adversary achieving SYSTEM level access on a workstation will find zero high-privileged memory artifacts to harvest for Pass-the-Hash (PtH).
 
-
-This configuration ensures that even if an adversary gains NT AUTHORITY\SYSTEM on a workstation, there are no high-privileged memory artifacts to harvest.
-`Active Directory Users and Computers > siem_soc.local > Corp > [Departments]`
+<br>
+<br>
 
 ![Active Directory GPO Hierarchy](./images/active_directory_gpo_hierarchy.png)
+`Active Directory Users and Computers > siem_soc.local > Corp > [Departments]`
+
+Organizational Unit (OU) & Policy Architecture
+Objective: To establish a granular, hierarchical structure that facilitates the systematic enforcement of the Principle of Least Privilege (PoLP) across the enterprise.
+
+Engineering Logic:
+A secure Active Directory environment requires the logical separation of assets and identities to prevent "policy bleeding"—where generic security settings accidentally grant excessive permissions. I engineered a modular OU hierarchy within the Corp container, allowing for targeted Group Policy Object (GPO) application based on the functional risk profile of each entity.
+
+Global Security Baseline: GPOs linked at the domain root (e.g., Global_Network_Hardening) establish universal security controls for all objects, ensuring a consistent minimum security posture across the entire forest.
+
+Departmental Hardening (HR/IT): Policies are applied at the sub-OU level to match specific user roles. The HR OU is subject to maximum Attack Surface Reduction (ASR) via execution restrictions, while the IT OU is configured for high-fidelity forensic auditing to monitor administrative activity.
+
+Tiered Isolation (Tier0/Workstations): This structure serves as the technical foundation for the Tiered Administration Model. By segregating Tier 0 assets from workstation endpoints into dedicated OUs, we can apply mutually exclusive policies—such as LAPS for workstations and Session Security for domain controllers—to prevent credential leakage between security zones.
 
 ---
 
-### 2. Basic Hardening and Attack Surface Reduction
+###  Basic Hardening and Attack Surface Reduction
 
-**The Reason:** Standard end-users do not require access to system configuration tools or native command-line interfaces. [cite_start]Leaving these interfaces accessible provides an unnecessary platform for local discovery and system tampering[cite: 22, 28].
+Host-Level Hardening: UI-Layer Attack Surface Reduction (ASR)
+Objective: To neutralize local reconnaissance capabilities for non-privileged users by restricting access to native system management interfaces.
 
-[cite_start]**The Explanation:** I implemented a "Deny-by-Default" approach for the HR department[cite: 38]. [cite_start]By disabling the Control Panel and native shells at the UI level via GPO, we significantly reduce the internal attack surface from non-technical employees[cite: 21, 24].
+Engineering Logic:
+The HR department represents a significant risk surface due to the high volume of external communications. In a default environment, a compromised standard account provides an immediate platform for an adversary to perform Enumeration (e.g., whoami, net user, ipconfig). By enforcing a Deny-by-Default UI policy, we strip the adversary of these native tools, forcing them to import external binaries which are more likely to be intercepted by EDR/SIEM telemetry.
 
-**Configuration Paths:**
-* [cite_start]**Control Panel:** `User Configuration > Policies > Administrative Templates > Control Panel > Prohibit access to Control Panel and PC settings > Enabled` [cite: 23]
-* [cite_start]**CMD/PowerShell UI:** `User Configuration > Policies > Administrative Templates > System > Prevent access to the command prompt > Enabled` [cite: 25]
+Key Security Controls:
 
+Administrative Interface Isolation: Prohibited access to the Control Panel and PC Settings to prevent unauthorized modifications of local security configurations and network settings.
+
+Shell Restriction (CMD/PowerShell UI): Disabled the Command Prompt and PowerShell interfaces for the HR OU. This prevents the execution of manual discovery commands and simple batch-based automation during the initial foothold phase.
+
+Registry Integrity Protection: Explicitly disabled Regedit.exe to block unauthorized modifications to User-level registry hives (HKCU), a primary target for establishing Persistence via Run keys.
+
+Configuration Path (GPO):
+User Configuration > Policies > Administrative Templates > System
 ![HR Environment Hardening](./images/hr_user_environment_hardening.png)
 
----
+<br>
+<br>
 
-### 3. Kernel-Level Application Control & Attack Surface Reduction
+### Kernel-Level Execution Control: Microsoft AppLocker
+Objective: To implement a robust, bypass-resistant application control framework that ensures only authorized, cryptographically verified binaries can execute.
 
-[cite_start]**The Reason:** Standard UI-based restrictions can be bypassed by advanced adversaries renaming executables or invoking them via alternative background processes[cite: 28]. [cite_start]True security requires an enforcement mechanism at the Operating System kernel level that verifies the cryptographic identity of the binary[cite: 29].
+Engineering Logic:
+While UI-based restrictions (GPOs) provide a necessary first layer of defense, they are easily bypassed by renaming executables or invoking them via background processes. To achieve true Attack Surface Reduction (ASR), I deployed Microsoft AppLocker. Unlike legacy "Software Restriction Policies," AppLocker operates at the OS kernel level, inspecting every execution request against a set of predefined rules before the process is allowed to initialize.
 
-**The Explanation:** I engineered a robust Application Control architecture using Microsoft AppLocker. [cite_start]First, I automated the **Application Identity Service** via a System Services GPO to ensure the evaluation engine initializes during the boot sequence[cite: 30, 31, 32]. [cite_start]I discarded legacy, weak "Path" and "Hash" rules in favor of **Publisher** conditions[cite: 35]. [cite_start]This utilizes the file's embedded digital certificate, ensuring that even if an attacker renames `CMD.EXE`, the kernel will inspect the cryptographic signature and block execution for the HR group[cite: 36, 37, 38]. [cite_start]This explicitly blocks Living off the Land Binaries (LOLBins) and Registry Editor access[cite: 38, 39]. [cite_start]A live execution test successfully proved system-level enforcement[cite: 42, 44, 45].
+Implementation Phases:
+A. Service Automation (The Enforcement Engine)
+AppLocker relies on the Application Identity Service (AppIDSvc) to retrieve file metadata and verify signatures. By default, this service is not active. I engineered a GPO to force the service to Automatic start-up across the domain. This ensures that the enforcement engine is initialized during the boot sequence, leaving no window for unauthorized execution before policy application.
 
-**Configuration Paths:**
-* [cite_start]**Service Automation:** `Computer Configuration > Policies > Windows Settings > Security Settings > System Services > Application Identity > Automatic` [cite: 34]
-* [cite_start]**AppLocker Rules:** `Computer Configuration > Policies > Windows Settings > Security Settings > Application Control Policies > AppLocker > Executable Rules` [cite: 41]
+Publisher-Based Rule Logic (Identity vs. Path)
+I discarded weak, legacy "Path" and "Hash" rules which are trivial to bypass (via renaming or file updates). Instead, I implemented Publisher Conditions.
 
+Mechanism: This logic inspects the Digital Certificate embedded in the binary.
+
+The "Deny" Logic: I created explicit Deny rules for the HR group targeting CMD.EXE, POWERSHELL.EXE, and REGEDT32.EXE. Because these rules target the Publisher (Microsoft Windows), even if an attacker renames CMD.EXE to CALC.EXE, the kernel will identify the cryptographic signature and block execution.
+
+Operational Verification
+The effectiveness of the kernel-level policy is demonstrated through a live execution test on a production endpoint. Any attempt to invoke a restricted binary—whether through the UI, a script, or a secondary process—is intercepted by the AppLocker driver, resulting in a system-level termination of the execution request.
+<br>
+<br>
 ![AppLocker Identity Service Automation](./images/applocker_identity_service_automation.png)
+<br>
+Computer Configuration \ Policies \ Windows Settings \ Security Settings \ System Services \ Application Identity
 ![AppLocker Publisher Deny Rules](./images/applocker_publisher_deny_rules.png)
+<br>
+Computer Configuration \ Policies \ Windows Settings \ Security Settings \ Application Control Policies \ AppLocker \ Executable Rules
 ![Endpoint AppLocker Restriction Verification](./images/endpoint_applocker_restriction_verification.png)
 
+<br>
+<br>
+
 ---
 
-### 4. PowerShell Deep Visibility & Process Auditing
+### PowerShell Deep Visibility & Process Auditing
 
 [cite_start]**The Reason:** By default, Windows operating systems do not record process creation to conserve resources, leaving the SOC completely blind to execution tactics[cite: 57, 59].
 
