@@ -1,26 +1,30 @@
-# Phase 2: Active Directory Hardening & Identity Security
+Phase 2: Active Directory Hardening & Identity Isolation
+Design Objectives: Breaking the Attack Chain
+This phase transitions the Active Directory environment from a flat, permissive state to a Zero-Trust Baseline. The primary objective is to disrupt the adversary's lifecycle—specifically Credential Harvesting and Lateral Movement—by enforcing strict trust boundaries and eliminating legacy attack vectors.
 
-## Introduction & Conceptual Overview
+Strategic Enforcement Pillars:
+Identity Tiering (LSASS Protection): Logical isolation of administrative tokens to prevent Tier 0 credential exposure on high-risk Tier 2 assets.
 
-In modern enterprise environments, Active Directory serves as the core of the organization and the central root of trust. Because it manages all identities, permissions, and computing assets, it is also the primary and most strategic target for threat actors. A compromise of a single identity or a misconfiguration in organizational policy can directly lead to a complete domain compromise and the collapse of business continuity.
+Protocol Eradication: Migration to a Kerberos-only environment by disabling NTLM, LLMNR, and NetBIOS, neutralizing Relay and Poisoning vectors.
 
-This phase of the project focuses on shifting the security paradigm from a "flat and open network" to a strict Defense-in-Depth and Identity & Access Management (IAM) architecture. The ultimate goal is to minimize the attack surface and make the enterprise environment highly hostile to attackers attempting to establish persistence or execute lateral movement.
+Execution Control (AppLocker): Kernel-level binary verification using digital signatures to block Living off the Land (LotL) tactics.
 
-The guiding concept behind this phase relies on the Principle of Least Privilege. The core idea is that every entity in the organization—whether a standard end-user, IT staff member, or senior network administrator—is granted only the exact level of access and the specific tools fundamentally required to perform their duties.
+Telemetry Augmentation: Transformation of endpoints into high-fidelity sensors via Script Block Logging and Process Command-Line Auditing.
 
-By meticulously designing organizational policies, enforcing clear trust boundaries, and hermetically protecting privileged identities, this architecture ensures that even in a severe scenario where an endpoint is breached, the attacker remains isolated, functionally restricted, and structurally blocked from pivoting toward core network assets.
+1. Identity Segmentation: Tiered Administration
+Objective: Mathematically eliminate the risk of Domain Admin credential theft from compromised workstations.
+
+Engineering Logic:
+The architecture enforces a "Boundary of Trust" by ensuring that high-privileged identities never authenticate to lower-security assets. This prevents the LSASS (Local Security Authority Subsystem Service) process from caching Tier 0 hashes/tickets on Tier 2 endpoints.
+
+Tier 0 OU (Root of Trust): Dedicated container for Domain Controllers and administrative identities (e.g., Admin Nehorai).
+
+URA Enforcement: Deployment of a "Deny-by-Default" User Rights Assignment GPO. This explicitly blocks Domain Admins from all logon vectors (Local, Network, RDP, Service, Batch) on workstations.
+
+Result: An adversary achieving SYSTEM level access on a workstation will find zero high-privileged memory artifacts to harvest for Pass-the-Hash (PtH).
 
 
-
-
-
-### 1. Organizational Unit (OU) & Policy Structure
-
-**The Reason:** Default Active Directory structures apply broad policies that often grant excessive permissions. [cite_start]A granular OU hierarchy is the foundation for enforcing the Principle of Least Privilege[cite: 9].
-
-[cite_start]**The Explanation:** I designed a hierarchical structure that systematically isolates user identities from computer assets[cite: 2, 16]. [cite_start]This architecture enables the application of global security baselines (such as domain-wide password complexity) while allowing for targeted, department-specific restrictions without disrupting legitimate IT operations[cite: 3, 5, 6].
-
-**Configuration Path:**
+This configuration ensures that even if an adversary gains NT AUTHORITY\SYSTEM on a workstation, there are no high-privileged memory artifacts to harvest.
 `Active Directory Users and Computers > siem_soc.local > Corp > [Departments]`
 
 ![Active Directory GPO Hierarchy](./images/active_directory_gpo_hierarchy.png)
