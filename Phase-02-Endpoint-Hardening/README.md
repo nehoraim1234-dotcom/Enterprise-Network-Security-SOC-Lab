@@ -325,17 +325,47 @@ To prevent users from accidentally connecting to a rogue or spoofed server, the 
 
 ---
 
-### 10. Defeating Network Poisoning: LLMNR & NBT-NS
+## Protocol Sanitization: Disabling LLMNR & NetBIOS
 
-[cite_start]**The Reason:** When primary DNS resolution fails, Windows endpoints default to broadcast protocols like Link-Local Multicast Name Resolution (LLMNR) and NetBIOS Name Service (NBT-NS)[cite: 138]. [cite_start]Attackers exploit this via tools like Responder, listening for these broadcasts, spoofing the requested resource, and capturing the victim's NTLM hash when the machine attempts to authenticate[cite: 139, 140].
+**Objective:** To eliminate local name resolution vulnerabilities and neutralize "Poisoning" attack vectors used for credential harvesting and unauthorized network access.
 
-[cite_start]**The Explanation:** I implemented a two-pronged architectural defense to enforce strict DNS-only name resolution[cite: 141]. [cite_start]I eradicated LLMNR by deploying a GPO that explicitly turns off multicast name resolution at the system level[cite: 143]. [cite_start]Concurrently, I neutralized NBT-NS by deploying a PowerShell startup script that forcefully changes the `NetbiosOptions` registry key, unbinding the legacy broadcast protocol directly from the workstation's network interface card[cite: 146, 149]. [cite_start]Audits verified both protocols are permanently disabled[cite: 147, 148].
+### The Engineering Logic: The Fallback Protocol Vulnerability
 
-**Configuration Paths:**
-* [cite_start]**Disable LLMNR:** `Computer Configuration > Policies > Administrative Templates > Network > DNS Client > Turn off multicast name resolution > Enabled` [cite: 144]
-* [cite_start]**Disable NetBIOS (Startup Script):** `Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces\tcpip*" -Name NetbiosOptions -Value 2` [cite: 146]
+In a standard environment, when DNS resolution fails, Windows workstations fallback to legacy broadcast protocols: **LLMNR** (Link-Local Multicast Name Resolution) and **NetBIOS over TCP/IP** (NBT-NS). These protocols function by "shouting" a query across the local network segment. 
+
+**The Danger:** An adversary positioned on the local network can use tools like **Responder** to listen for these broadcasts and "poison" the response. By pretending to be the requested resource (e.g., a file share or internal site), the attacker tricks the victim’s machine into attempting an authentication handshake, effectively capturing the user's **NTLMv2 hashes** for offline cracking or real-time relay attacks.
+
+[Image of LLMNR and NetBIOS poisoning attack]
+
+---
+
+### Implementation Phases:
+
+#### I. LLMNR Disablement
+
+I implemented a domain-wide GPO to explicitly prohibit the use of LLMNR. This ensures that if a DNS query fails, the system will not broadcast the request to the local link, preventing an attacker from intercepting the name resolution attempt.
 
 ![Disable LLMNR GPO](./images/disable_llmnr_gpo.png)
+**Path:** `Computer Configuration > Policies > Administrative Templates > Network > DNS Client > Turn off Link-Local Multicast Name Resolution`
+
+**Verification:** Post-deployment, I performed a registry audit to ensure the `EnableMulticast` value was set to **0**, confirming the protocol's deactivation across the fleet.
+
 ![LLMNR Registry Audit Verification](./images/llmnr_registry_audit_verification.png)
+
+#### II. NetBIOS Over TCP/IP (NBT-NS) Deactivation
+
+Unlike LLMNR, NetBIOS is often bound to individual network interfaces. To achieve a comprehensive lockdown, I utilized a **Startup Script GPO**. This script automates the disablement of NetBIOS on all active network adapters during the system boot sequence, ensuring no "backdoor" for broadcast-based attacks remains open.
+
 ![Disable NetBIOS Startup Script GPO](./images/disable_netbios_startup_script_gpo.png)
+**Path:** `Computer Configuration > Policies > Windows Settings > Scripts (Startup/Shutdown) > Startup`
+
+**Verification:** Using the Command Line Interface (CLI), I verified the NetBIOS status on the production endpoints. The "NetBIOS over Tcpip" status returning as **Disabled** confirms the success of the hardening script.
+
 ![NetBIOS Disabled Verification CLI](./images/netbios_disabled_verification_cli.png)
+
+---
+
+### Technical Analysis:
+
+* **Neutralizing Credential Harvesting:** By disabling these protocols, the primary "discovery" phase of an internal network attack is neutralized. An attacker running Responder will no longer receive broadcasted authentication requests, effectively starving them of the NTLM hashes required for further lateral movement.
+* **DNS Integrity Dependency:** This hardening step mandates a healthy and reliable DNS infrastructure. By removing the fallback mechanisms, we force the environment to rely solely on DNS, which—when combined with DNSSEC—provides a significantly more secure name resolution path.
